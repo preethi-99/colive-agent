@@ -1,122 +1,126 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from 'react';
+import { supabase } from './lib/supabase';
+import { seedIfEmpty } from './lib/seed';
+import { RoommateList } from './components/RoommateList';
+import { ExpenseTracker } from './components/ExpenseTracker';
+import { ChoreBoard } from './components/ChoreBoard';
+import { ChatInterface } from './components/ChatInterface';
+import type { Roommate, Expense, Chore } from './types';
 
-function App() {
-  const [count, setCount] = useState(0)
+type Tab = 'roommates' | 'expenses' | 'chores' | 'chat';
+
+const TABS: { id: Tab; label: string; emoji: string }[] = [
+  { id: 'roommates', label: 'Roommates', emoji: '👥' },
+  { id: 'expenses',  label: 'Expenses',  emoji: '💸' },
+  { id: 'chores',    label: 'Chores',    emoji: '🧹' },
+  { id: 'chat',      label: 'Ask Claude', emoji: '🤖' },
+];
+
+export default function App() {
+  const [tab, setTab] = useState<Tab>('roommates');
+  const [roommates, setRoommates] = useState<Roommate[]>([]);
+  const [expenses, setExpenses]   = useState<Expense[]>([]);
+  const [chores, setChores]       = useState<Chore[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await seedIfEmpty();
+        const [{ data: rm, error: e1 }, { data: ex, error: e2 }, { data: ch, error: e3 }] =
+          await Promise.all([
+            supabase.from('roommates').select('*').order('created_at'),
+            supabase.from('expenses').select('*').order('date', { ascending: false }),
+            supabase.from('chores').select('*').order('task_name'),
+          ]);
+        if (e1 ?? e2 ?? e3) throw e1 ?? e2 ?? e3;
+        setRoommates((rm as Roommate[]) ?? []);
+        setExpenses((ex as Expense[]) ?? []);
+        setChores((ch as Chore[]) ?? []);
+      } catch (err) {
+        console.error(err);
+        setError('Could not load house data. Check your Supabase configuration and run schema.sql.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl select-none">🏠</span>
+            <span className="font-bold text-gray-900 text-lg tracking-tight">CoLive</span>
+            <span className="text-gray-300 hidden sm:block mx-1">·</span>
+            <span className="text-gray-400 text-sm hidden sm:block">House Manager</span>
+          </div>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          <nav className="flex gap-1">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  tab === t.id
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                <span>{t.emoji}</span>
+                <span className="hidden sm:block">{t.label}</span>
+              </button>
+            ))}
+          </nav>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {/* Content */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        {loading && (
+          <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400">
+            <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <p className="text-sm">Loading house data…</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-5 text-sm">
+            <p className="font-semibold mb-1">Setup required</p>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+            {tab === 'roommates' && (
+              <RoommateList roommates={roommates} expenses={expenses} />
+            )}
+            {tab === 'expenses' && (
+              <ExpenseTracker expenses={expenses} roommates={roommates} />
+            )}
+            {tab === 'chores' && (
+              <ChoreBoard
+                chores={chores}
+                roommates={roommates}
+                onChoreUpdated={updated =>
+                  setChores(prev => prev.map(c => (c.id === updated.id ? updated : c)))
+                }
+              />
+            )}
+            {tab === 'chat' && (
+              <ChatInterface
+                roommates={roommates}
+                expenses={expenses}
+                chores={chores}
+              />
+            )}
+          </>
+        )}
+      </main>
+    </div>
+  );
 }
-
-export default App
