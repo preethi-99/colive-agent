@@ -97,10 +97,18 @@ export default function App() {
         {!loading && !error && (
           <>
             {tab === 'roommates' && (
-              <RoommateList roommates={roommates} expenses={expenses} />
+              <RoommateList
+                roommates={roommates}
+                expenses={expenses}
+                onRoommateAdded={r => setRoommates(prev => [...prev, r])}
+              />
             )}
             {tab === 'expenses' && (
-              <ExpenseTracker expenses={expenses} roommates={roommates} />
+              <ExpenseTracker
+                expenses={expenses}
+                roommates={roommates}
+                onExpenseAdded={e => setExpenses(prev => [e, ...prev])}
+              />
             )}
             {tab === 'chores' && (
               <ChoreBoard
@@ -108,6 +116,9 @@ export default function App() {
                 roommates={roommates}
                 onChoreUpdated={updated =>
                   setChores(prev => prev.map(c => (c.id === updated.id ? updated : c)))
+                }
+                onChoreAdded={c =>
+                  setChores(prev => [...prev, c].sort((a, b) => a.task_name.localeCompare(b.task_name)))
                 }
               />
             )}

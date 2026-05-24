@@ -1,8 +1,12 @@
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { Modal } from './Modal';
 import type { Expense, Roommate } from '../types';
 
 interface Props {
   expenses: Expense[];
   roommates: Roommate[];
+  onExpenseAdded: (e: Expense) => void;
 }
 
 function calculateBalances(
@@ -22,7 +26,147 @@ function calculateBalances(
   return b;
 }
 
-export function ExpenseTracker({ expenses, roommates }: Props) {
+const FIELD = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+const LABEL = 'block text-sm font-medium text-gray-700 mb-1';
+
+function today(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function AddExpenseModal({
+  roommates,
+  onClose,
+  onSaved,
+}: {
+  roommates: Roommate[];
+  onClose: () => void;
+  onSaved: (e: Expense) => void;
+}) {
+  const [description, setDescription]   = useState('');
+  const [amount, setAmount]             = useState('');
+  const [paidBy, setPaidBy]             = useState(roommates[0]?.id ?? '');
+  const [splitBetween, setSplitBetween] = useState<string[]>(roommates.map(r => r.id));
+  const [date, setDate]                 = useState(today());
+  const [saving, setSaving]             = useState(false);
+  const [err, setErr]                   = useState<string | null>(null);
+
+  function toggleSplit(id: string) {
+    setSplitBetween(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+    );
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!description.trim() || !amount || splitBetween.length === 0) return;
+    setSaving(true);
+    setErr(null);
+    const { data, error } = await supabase
+      .from('expenses')
+      .insert({
+        description: description.trim(),
+        amount: parseFloat(amount),
+        paid_by: paidBy,
+        split_between: splitBetween,
+        date,
+      })
+      .select()
+      .single();
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    onSaved(data as Expense);
+    onClose();
+  }
+
+  return (
+    <Modal title="Add Expense" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className={LABEL}>Description</label>
+          <input
+            className={FIELD}
+            placeholder="e.g. Groceries"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            required
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label className={LABEL}>Amount ($)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            className={FIELD}
+            placeholder="0.00"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label className={LABEL}>Paid by</label>
+          <select
+            className={FIELD}
+            value={paidBy}
+            onChange={e => setPaidBy(e.target.value)}
+          >
+            {roommates.map(r => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={LABEL}>Split between</label>
+          <div className="space-y-2 mt-1">
+            {roommates.map(r => (
+              <label key={r.id} className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={splitBetween.includes(r.id)}
+                  onChange={() => toggleSplit(r.id)}
+                  className="w-4 h-4 rounded accent-indigo-600"
+                />
+                <span className="text-sm text-gray-700">{r.name}</span>
+              </label>
+            ))}
+          </div>
+          {splitBetween.length === 0 && (
+            <p className="text-xs text-rose-500 mt-1">Select at least one person.</p>
+          )}
+        </div>
+
+        <div>
+          <label className={LABEL}>Date</label>
+          <input
+            type="date"
+            className={FIELD}
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            required
+          />
+        </div>
+
+        {err && <p className="text-sm text-rose-600">{err}</p>}
+
+        <button
+          type="submit"
+          disabled={saving || !description.trim() || !amount || splitBetween.length === 0}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+        >
+          {saving ? 'Saving…' : 'Add Expense'}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+export function ExpenseTracker({ expenses, roommates, onExpenseAdded }: Props) {
+  const [showModal, setShowModal] = useState(false);
   const nameMap = Object.fromEntries(roommates.map(r => [r.id, r.name]));
   const balances = calculateBalances(roommates, expenses);
   const total = expenses.reduce((s, e) => s + Number(e.amount), 0);
@@ -34,9 +178,20 @@ export function ExpenseTracker({ expenses, roommates }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900">Expenses</h2>
-        <span className="text-sm text-gray-400">
-          {expenses.length} expenses · ${total.toFixed(2)} total
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">
+            {expenses.length} expenses · ${total.toFixed(2)} total
+          </span>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Expense
+          </button>
+        </div>
       </div>
 
       {/* Balance cards */}
@@ -117,6 +272,14 @@ export function ExpenseTracker({ expenses, roommates }: Props) {
           </tbody>
         </table>
       </div>
+
+      {showModal && (
+        <AddExpenseModal
+          roommates={roommates}
+          onClose={() => setShowModal(false)}
+          onSaved={onExpenseAdded}
+        />
+      )}
     </div>
   );
 }
